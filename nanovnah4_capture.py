@@ -1,12 +1,10 @@
 #!/usr/bin/python
-
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 '''
 Command line tool to capture a screen shot from NanoVNA or tinySA
 connect via USB serial, issue the command 'capture'
 and fetch 320x240 or 480x320 rgb565 pixel.
-These pixels are converted to rgb8888 values
+These pixels are converted to rgb888 values
 that are stored as an image (e.g. png)
 '''
 
@@ -18,11 +16,13 @@ import struct
 import sys
 import numpy
 from PIL import Image
-
+import PIL.ImageOps 
 
 # ChibiOS/RT Virtual COM Port
 VID = 0x0483 #1155
 PID = 0x5740 #22336
+
+print('\nnanovnaH4_capture v0.1\n')
 
 # Get nanovna device automatically
 def getdevice() -> str:
@@ -32,30 +32,34 @@ def getdevice() -> str:
             return device.device
     raise OSError("device not found")
 
-
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument( '-d', '--device', dest = 'device',
     help = 'connect to device' )
 typ = ap.add_mutually_exclusive_group()
 typ.add_argument( '-n', '--nanovna', action = 'store_true',
-    help = 'use with NanoVNA-H (default)' )
+    help = 'use with NanoVNA-H' )
 typ.add_argument( '--h4', action = 'store_true',
-    help = 'use with NanoVNA-H4' )
+    help = 'use with NanoVNA-H4 (default)' )
 typ.add_argument( '-t', '--tinysa', action = 'store_true',
     help = 'use with tinySA' )
 typ.add_argument( '--ultra', action = 'store_true',
     help = 'use with tinySA Ultra' )
+typ.add_argument( '-p', '--tinypfa', action = 'store_true',
+    help = 'use with tinyPFA' )
 ap.add_argument( "-o", "--out",
     help="write the data into file OUT" )
+ap.add_argument( "-s", "--scale",
+    help="scale image s*",default=2 )
 
 options = ap.parse_args()
 outfile = options.out
 nanodevice = options.device or getdevice()
+sf=float(options.scale)
 
-# The size of the screen (2.8" devices)
-width = 320
-height = 240
+# The size of the screen (4" devices)
+width = 480
+height = 320
 
 if options.tinysa:
     devicename = 'tinySA'
@@ -63,8 +67,12 @@ elif options.ultra:
     devicename = 'tinySA Ultra' # 4" device
     width = 480
     height = 320
-elif options.h4:
-    devicename = 'NanoVNA-H4' # 4" device
+elif options.nanovna:
+    devicename = 'NanoVNA-H4' # 2.8" device
+    width = 320
+    height = 240
+elif options.tinypfa:
+    devicename = 'tinyPFA' # 4" device
     width = 480
     height = 320
 else:
@@ -97,18 +105,24 @@ if len( bytestream ) != 2 * size:
 
 # convert bytestream to 1D word array
 rgb565 = struct.unpack( f'>{size}H', bytestream )
-# convert to 32bit numpy array Rrrr.rGgg.gggB.bbbb -> 0000.0000.0000.0000.Rrrr.rGgg.gggB.bbbb
-rgb565_32 = numpy.array( rgb565, dtype=numpy.uint32 )
-# convert zero padded 16bit RGB565 pixel to 32bit RGBA8888 pixel
-# 0000.0000.0000.0000.Rrrr.rGgg.gggB.bbbb -> 1111.1111.Rrrr.r000.Gggg.gg00.Bbbb.b000
-rgba8888 = 0xFF000000 + ((rgb565_32 & 0xF800) >> 8) + ((rgb565_32 & 0x07E0) << 5) + ((rgb565_32 & 0x001F) << 19)
 
-# make an image from pixel array, see: https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.frombuffer
-image =  Image.frombuffer('RGBA', ( width, height ), rgba8888, 'raw', 'RGBA', 0, 1)
-
-filename = options.out or datetime.now().strftime( f'{devicename}_%Y%m%d_%H%M%S.png' )
-
-try:
-    image.save( filename ) # .. and save it to file (format according extension)
-except ValueError: # unknown (or missing) exension
-    image.save( filename + '.png' ) # force PNG format
+#create new image array
+a=[0]*3
+a=[a]*width
+a=[a]*height
+a=numpy.array(a, dtype=numpy.uint8)
+for x in range (0,height):
+  for y in range (0,width):
+    index = y+width*x
+    pixel = rgb565[index]
+    a[x,y,0]=(pixel&0xf800)>>8
+    a[x,y,1]=(pixel&0x07e0)>>3
+    a[x,y,2]=(pixel&0x001f)<<3
+image=Image.fromarray(a,"RGB")
+#some transforms
+image=image.resize((int(sf*width),int(sf*height)))
+inverted_image=PIL.ImageOps.invert(image)
+#save files
+filename = options.out or datetime.now().strftime( f'{devicename}_%Y%m%d_%H%M%S' )
+image.save(filename + '.png')
+inverted_image.save(filename + 'i.png')
