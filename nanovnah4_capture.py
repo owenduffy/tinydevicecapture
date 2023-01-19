@@ -16,13 +16,15 @@ import struct
 import sys
 import numpy
 from PIL import Image
-import PIL.ImageOps 
+import PIL.ImageOps
+from pathlib import Path
 
 # ChibiOS/RT Virtual COM Port
 VID = 0x0483 #1155
 PID = 0x5740 #22336
 
-print('\nnanovnaH4_capture v0.1\n')
+app=Path(__file__).stem
+print(f'{app}_v0.2')
 
 # Get nanovna device automatically
 def getdevice() -> str:
