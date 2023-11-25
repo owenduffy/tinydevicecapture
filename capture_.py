@@ -1,11 +1,15 @@
 #!/usr/bin/python
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+#from Ho-Ro's nanovna-tools, modified by Owen Duffy.
+
 '''
 Command line tool to capture a screen shot from NanoVNA or tinySA
-connect via USB serial, issue the command 'capture'
-and fetch 320x240 or 480x320 rgb565 pixel.
-These pixels are converted to rgb888 values
-that are stored as an image (e.g. png)
+connect via USB serial.
+Name the script capture_<devicetype>.py and the default device type
+as specified in the script will be extraced from the script name, etg
+capture_tinysaultra.py.
+The script emits a png file, and one with inverted colours for printing etc.
 '''
 
 import argparse
@@ -18,15 +22,18 @@ import numpy
 from PIL import Image
 import PIL.ImageOps
 from pathlib import Path
+import re
 
 # ChibiOS/RT Virtual COM Port
 VID = 0x0483 #1155
 PID = 0x5740 #22336
 
 app=Path(__file__).stem
-print(f'{app}_v0.2')
+print(f'{app}_v0.3')
+#extract default device name from script name
+devicename=re.sub(r'capture_(.*)\.py',r'\1',(Path(__file__).name).lower())
 
-# Get nanovna device automatically
+# Get nanovna com device automatically
 def getdevice() -> str:
     device_list = list_ports.comports()
     for device in device_list:
@@ -36,49 +43,43 @@ def getdevice() -> str:
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument( '-d', '--device', dest = 'device',
-    help = 'connect to device' )
-typ = ap.add_mutually_exclusive_group()
-typ.add_argument( '-n', '--nanovna', action = 'store_true',
-    help = 'use with NanoVNA-H' )
-typ.add_argument( '--h4', action = 'store_true',
-    help = 'use with NanoVNA-H4 (default)' )
-typ.add_argument( '-t', '--tinysa', action = 'store_true',
-    help = 'use with tinySA' )
-typ.add_argument( '--ultra', action = 'store_true',
-    help = 'use with tinySA Ultra' )
-typ.add_argument( '-p', '--tinypfa', action = 'store_true',
-    help = 'use with tinyPFA' )
+ap.add_argument( '-c', '--com', dest = 'comport',
+    help = 'com port' )
+ap.add_argument( "-d", "--device",
+    help="device type" )
 ap.add_argument( "-o", "--out",
     help="write the data into file OUT" )
 ap.add_argument( "-s", "--scale",
     help="scale image s*",default=2 )
 
 options = ap.parse_args()
+nanodevice = options.comport or getdevice()
+if options.device!=None:
+  devicename = options.device
 outfile = options.out
-nanodevice = options.device or getdevice()
 sf=float(options.scale)
 
-# The size of the screen (4" devices)
-width = 480
-height = 320
 
-if options.tinysa:
-    devicename = 'tinySA'
-elif options.ultra:
-    devicename = 'tinySA Ultra' # 4" device
+if devicename == 'tinysa':
     width = 480
     height = 320
-elif options.nanovna:
-    devicename = 'NanoVNA-H4' # 2.8" device
+elif devicename == 'nanovnah':
+    width = 480
+    height = 320
+elif devicename == 'tinysaultra': # 4" device
+    width = 480
+    height = 320
+elif devicename == 'nanovnah4': # 4" device
     width = 320
     height = 240
-elif options.tinypfa:
-    devicename = 'tinyPFA' # 4" device
+elif devicename == 'tinypfa': # 4" device
     width = 480
     height = 320
 else:
-    devicename = 'NanoVNA-H'
+    sys.exit('Unknown device name.');
+
+print('Using device =',devicename)
+
 
 # NanoVNA sends captured image as 16 bit RGB565 pixel
 size = width * height
