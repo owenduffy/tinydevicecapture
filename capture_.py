@@ -61,17 +61,17 @@ sf=float(options.scale)
 
 
 if devicename == 'tinysa':
-    width = 480
-    height = 320
+    width = 320
+    height = 240
 elif devicename == 'nanovnah':
-    width = 480
-    height = 320
+    width = 320
+    height = 240
 elif devicename == 'tinysaultra': # 4" device
     width = 480
     height = 320
 elif devicename == 'nanovnah4': # 4" device
-    width = 320
-    height = 240
+    width = 480
+    height = 320
 elif devicename == 'tinypfa': # 4" device
     width = 480
     height = 320
