@@ -29,7 +29,7 @@ VID = 0x0483 #1155
 PID = 0x5740 #22336
 
 app=Path(__file__).stem
-print(f'{app}_v0.3')
+print(f'{app}_v0.4')
 #extract default device name from script name
 devicename=re.sub(r'capture_(.*)\.py',r'\1',(Path(__file__).name).lower())
 
@@ -50,36 +50,41 @@ ap.add_argument( "-d", "--device",
 ap.add_argument( "-o", "--out",
     help="write the data into file OUT" )
 ap.add_argument( "-s", "--scale",
-    help="scale image s*",default=2 )
+    help="scale image s*", type=float )
 
 options = ap.parse_args()
 nanodevice = options.comport or getdevice()
 if options.device!=None:
   devicename = options.device
 outfile = options.out
-sf=float(options.scale)
-
 
 if devicename == 'tinysa':
     width = 320
     height = 240
+    sf = 3
 elif devicename == 'nanovnah':
     width = 320
     height = 240
+    sf = 3
 elif devicename == 'tinysaultra': # 4" device
     width = 480
     height = 320
+    sf = 2
 elif devicename == 'nanovnah4': # 4" device
     width = 480
     height = 320
+    sf = 2
 elif devicename == 'tinypfa': # 4" device
     width = 480
     height = 320
+    sf = 2
 else:
-    sys.exit('Unknown device name.');
+    sys.exit('Unknown device name. Supported devices: tinysa, nanovnah, tinysaultra, nanovnah4, tinypfa.');
+
+if(options.scale!=None):
+  sf=options.scale
 
 print('Using device =',devicename)
-
 
 # NanoVNA sends captured image as 16 bit RGB565 pixel
 size = width * height
