@@ -27,7 +27,7 @@ VID = 0x0483 #1155
 PID = 0x5740 #22336
 
 app=Path(__file__).stem
-print(f'{app}_v0.6')
+print(f'{app}_v0.7')
 
 # Get nanovna device automatically
 def getdevice() -> str:
@@ -65,8 +65,8 @@ sf=float(options.scale)
 print(devicename)
 
 if devicename == 'tinysa':
-    width = 480
-    height = 320
+    width = 320
+    height = 240
 elif devicename == 'nanovnah':
     width = 320
     height = 240
