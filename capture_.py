@@ -21,13 +21,14 @@ from pathlib import Path
 import re
 import time
 import struct
+from crc import Calculator, Crc16
 
 # ChibiOS/RT Virtual COM Port
 VID = 0x0483 #1155
 PID = 0x5740 #22336
 
 app=Path(__file__).stem
-print(f'{app}_v0.7')
+print(f'{app}_v0.8')
 
 # Get nanovna device automatically
 def getdevice() -> str:
@@ -43,7 +44,7 @@ devicename=re.sub(r'capture_(.*)\.py',r'\1',(Path(__file__).name).lower())
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument( '-b', '--baud', dest = 'baudrate',
-    help = 'com port' )
+    help = 'com port',default=500000 )
 ap.add_argument( '-c', '--com', dest = 'comport',
     help = 'com port' )
 ap.add_argument( "-d", "--device",
@@ -53,7 +54,7 @@ ap.add_argument( "-o", "--out",
 ap.add_argument( "-s", "--scale",
     help="scale image s*",default=2 )
 ap.add_argument( "-f", "--format",
-    help="image format [rle | rgb565]",default='rle' )
+    help="image format [rle | rgb565]" )
 
 options = ap.parse_args()
 nanodevice = options.comport or getdevice()
@@ -82,44 +83,53 @@ elif devicename == 'tinypfa': # 4" device
 else:
     sys.exit('Unknown device name.');
 
-# NanoVNA sends captured image as 16 bit RGB565 pixel
-size = width * height
-
 crlf = b'\r\n'
 prompt = b'ch> '
 
-# do the communication
-if(options.baudrate!=None):
+#start talking
+with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_tiny: # open serial connection
+  nano_tiny.write( b'pause\r' )  # stop screen update
+  echo = nano_tiny.read_until( b'pause' + crlf + prompt ) # wait for completion
+  #print( echo )
+
+  if(options.format=='rgb565'):
+    nano_tiny.write( b'capture\rresume\r' )  # request screen capture, type ahead resume
+    echo = nano_tiny.read_until( b'capture' + crlf ) # wait for start of transfer
+  else:
+    nano_tiny.write( b'capture rle\rresume\r' )  # request screen capture, type ahead resume
+    echo = nano_tiny.read_until( b'capture rle' + crlf ) # wait for start of transfer
+#  print( echo )
+
+  bytestream = nano_tiny.read(0x0a) # is this a RLE header?
+  hdrmagic,hdrwidth, hdrheight,hdrbpp,hdrcompression,hdrpsize=struct.unpack_from('<HHHBBH',bytestream,0)
+  if(hdrmagic == 0x4d42):
+    if(hdrbpp!=8):
+      raise Exception('Unsupported compression bpp.')
+    options.format='rle'
+    width=hdrwidth
+    height=hdrheight
+  size = width * height
   baudrate=int(options.baudrate)
   stimeout=int(size*2*2/baudrate*10)
   if(options.format=='rle'):
     stimeout/=4
-else:
-  baudrate=9600
-  stimeout=5
+  print('fmt: ',options.format)
+  print('Setting image download timeout to {0:0.1f}s'.format(stimeout))
+  nano_tiny.timeout=stimeout
 
-with serial.Serial( nanodevice, baudrate=baudrate, timeout=1 ) as nano_tiny: # open serial connection
-  nano_tiny.write( b'pause\r' )  # stop screen update
-  echo = nano_tiny.read_until( b'pause' + crlf + prompt ) # wait for completion
-  #print( echo )
   if(options.format=='rle'):
-    nano_tiny.write( b'capture rle\rresume\r' )  # request screen capture, type ahead resume
-    print('fmt ',options.format)
-    echo = nano_tiny.read_until( b'capture rle' + crlf ) # wait for start of transfer
-#      print( echo )
-    print('Setting image download timeout to {0:0.1f}s'.format(stimeout))
-    nano_tiny.timeout=stimeout
     starttime=time.time()
     waitfor=prompt + b'resume' + crlf + prompt
-    print('read now...')
-    bytestream = nano_tiny.read_until(waitfor) # wait for completion
+    bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
     endtime=time.time()
+    calculator = Calculator(Crc16.KERMIT)
+    #assert expected == calculator.checksum(bytestream)
+    print('CRC16-CCITT (KERMIT): 0x{:04x}'.format(calculator.checksum(bytestream)))
     print('RLE: time: {:0.3f}s, transferred: {:d}B, throughput: {:d}bps'.format(endtime-starttime,len(bytestream),int(len(bytestream)*8/(endtime-starttime))))
-    header,width, height,bpp,compression,psize=struct.unpack_from('<HHHBBH',bytestream,0)
     sptr=0xa
     size=width*height
-    palette=struct.unpack_from('<{:d}H'.format(psize),bytestream,sptr)
-    sptr=sptr+psize
+    palette=struct.unpack_from('<{:d}H'.format(hdrpsize),bytestream,sptr)
+    sptr=sptr+hdrpsize
     bitmap=bytearray(size*2)
     dptr=0
     row=0
@@ -147,25 +157,18 @@ with serial.Serial( nanodevice, baudrate=baudrate, timeout=1 ) as nano_tiny: # o
       row+=1
     bytestream=bitmap
   elif (options.format=='rgb565'):
-    print('fmt ',options.format)
-    nano_tiny.write( b'capture\r' )  # request screen capture
-    echo = nano_tiny.read_until( b'capture' + crlf ) # wait for start of transfer
-#    print( echo )
-    print('Setting image download timeout to {0:0.1f}s'.format(stimeout))
     nano_tiny.timeout=stimeout
     starttime=time.time()
-    bytestream = nano_tiny.read(2*size)
+    waitfor=prompt + b'resume' + crlf + prompt
+    print('read now...')
+    bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
+    bytestream=bytestream[0:-len(waitfor)]
     endtime=time.time()
     print('RGB: time: {:0.3f}s, transferred: {:d}B, throughput: {:d}bps'.format(endtime-starttime,len(bytestream),int(2*size*8/(endtime-starttime))))
-    nano_tiny.timeout=1
-    echo = nano_tiny.read_until( prompt ) # wait for cmd completion
-#    print( echo )
-    nano_tiny.write( b'resume\r' )  # resume the screen update
-    echo = nano_tiny.read_until( b'resume' + crlf + prompt ) # wait for completion
-#    print( echo )
+ #   nano_tiny.timeout=1
 
-if len(bytestream)!=2*size:
-  raise Exception('capture error - wrong screen size?')
+if(len(bytestream)!=2*size):
+  raise Exception('Capture error - wrong screen size?')
 
 # convert bytestream to 1D word array
 rgb565 = struct.unpack( f'>{size}H', bytestream )
