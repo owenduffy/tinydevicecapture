@@ -21,14 +21,14 @@ from pathlib import Path
 import re
 import time
 import struct
-from crc import Calculator, Crc16
+#from crc import Calculator, Crc16
 
 # ChibiOS/RT Virtual COM Port
 VID = 0x0483 #1155
 PID = 0x5740 #22336
 
 app=Path(__file__).stem
-print(f'{app}_v0.8')
+print(f'{app}_v1.01')
 
 # Get nanovna device automatically
 def getdevice() -> str:
@@ -122,9 +122,10 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
     waitfor=prompt + b'resume' + crlf + prompt
     bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
     endtime=time.time()
-    calculator = Calculator(Crc16.KERMIT)
-    #assert expected == calculator.checksum(bytestream)
-    print('CRC16-CCITT (KERMIT): 0x{:04x}'.format(calculator.checksum(bytestream)))
+#CRC feature requested, not yet implemented... OD 20240727
+#    calculator = Calculator(Crc16.KERMIT)
+3    assert expected == calculator.checksum(bytestream)
+#    print('CRC16-CCITT (KERMIT): 0x{:04x}'.format(calculator.checksum(bytestream)))
     print('RLE: time: {:0.3f}s, transferred: {:d}B, throughput: {:d}bps'.format(endtime-starttime,len(bytestream),int(len(bytestream)*8/(endtime-starttime))))
     sptr=0xa
     size=width*height
