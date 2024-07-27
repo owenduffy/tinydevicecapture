@@ -90,6 +90,8 @@ prompt = b'ch> '
 with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_tiny: # open serial connection
   nano_tiny.write( b'pause\r' )  # stop screen update
   echo = nano_tiny.read_until( b'pause' + crlf + prompt ) # wait for completion
+  if(len(echo)==0):
+    raise Exception('Timed out, zero bytes received waiting for "pause" command response, check communications settings (incl on NanoVNA).')
   #print( echo )
 
   if(options.format=='rgb565'):
@@ -124,7 +126,7 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
     endtime=time.time()
 #CRC feature requested, not yet implemented... OD 20240727
 #    calculator = Calculator(Crc16.KERMIT)
-3    assert expected == calculator.checksum(bytestream)
+#    assert expected == calculator.checksum(bytestream)
 #    print('CRC16-CCITT (KERMIT): 0x{:04x}'.format(calculator.checksum(bytestream)))
     print('RLE: time: {:0.3f}s, transferred: {:d}B, throughput: {:d}bps'.format(endtime-starttime,len(bytestream),int(len(bytestream)*8/(endtime-starttime))))
     sptr=0xa
