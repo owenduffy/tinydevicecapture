@@ -28,7 +28,7 @@ VID = 0x0483 #1155
 PID = 0x5740 #22336
 
 app=Path(__file__).stem
-print(f'{app}_v1.01')
+print(f'{app}_v1.02')
 
 # Get nanovna device automatically
 def getdevice() -> str:
@@ -158,6 +158,8 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
             dptr+=2
             sptr+=1
       row+=1
+    if(bytestream[-len(waitfor):]!=waitfor):
+      raise Exception('Communications timeout.')
     bytestream=bitmap
   elif (options.format=='rgb565'):
     nano_tiny.timeout=stimeout
@@ -165,6 +167,8 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
     waitfor=prompt + b'resume' + crlf + prompt
     print('read now...')
     bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
+    if(bytestream[-len(waitfor):]!=waitfor):
+      raise Exception('Communications timeout.')
     bytestream=bytestream[0:-len(waitfor)]
     endtime=time.time()
     print('RGB: time: {:0.3f}s, transferred: {:d}B, throughput: {:d}bps'.format(endtime-starttime,len(bytestream),int(2*size*8/(endtime-starttime))))
