@@ -38,6 +38,38 @@ def getdevice() -> str:
             return device.device
     raise OSError("device not found")
 
+def decoderle8(bytestream,width,height,hdrpsize):
+  sptr=0xa
+  size=width*height
+  palette=struct.unpack_from('<{:d}H'.format(hdrpsize),bytestream,sptr)
+  sptr=sptr+hdrpsize
+  bitmap=bytearray(size*2)
+  dptr=0
+  row=0
+  while(row<height):
+    #process RLE block
+    bsize=struct.unpack_from('<H',bytestream,sptr)[0]
+    sptr=sptr+2
+    nptr=sptr+bsize
+    while(sptr<nptr):
+      count=struct.unpack_from('<b',bytestream,sptr)[0]
+      sptr+=1
+      if(count<0):
+        color=palette[bytestream[sptr]]
+        sptr+=1
+        while(count<=0):
+          count=count+1
+          struct.pack_into('<H',bitmap,dptr,color)
+          dptr+=2
+      else:
+        while(count>=0):
+          count=count-1
+          struct.pack_into('<H',bitmap,dptr,palette[bytestream[sptr]])
+          dptr+=2
+          sptr+=1
+    row+=1
+  return bitmap
+
 #extract default device name from script name
 devicename=re.sub(r'capture_(.*)\.py',r'\1',(Path(__file__).name).lower())
 
@@ -124,43 +156,17 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
     waitfor=prompt + b'resume' + crlf + prompt
     bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
     endtime=time.time()
+    print('RLE: time: {:0.3f}s, transferred: {:,d}B, throughput: {:,d}bps'.format(endtime-starttime,len(bytestream),int(len(bytestream)*8/(endtime-starttime))))
+    if(bytestream[-len(waitfor):]!=waitfor):
+      raise Exception('Communications timeout.')
 #CRC feature requested, not yet implemented... OD 20240727
 #    calculator = Calculator(Crc16.KERMIT)
 #    assert expected == calculator.checksum(bytestream)
 #    print('CRC16-CCITT (KERMIT): 0x{:04x}'.format(calculator.checksum(bytestream)))
-    print('RLE: time: {:0.3f}s, transferred: {:d}B, throughput: {:d}bps'.format(endtime-starttime,len(bytestream),int(len(bytestream)*8/(endtime-starttime))))
-    sptr=0xa
-    size=width*height
-    palette=struct.unpack_from('<{:d}H'.format(hdrpsize),bytestream,sptr)
-    sptr=sptr+hdrpsize
-    bitmap=bytearray(size*2)
-    dptr=0
-    row=0
-    while(row<height):
-      #process RLE block
-      bsize=struct.unpack_from('<H',bytestream,sptr)[0]
-      sptr=sptr+2
-      nptr=sptr+bsize
-      while(sptr<nptr):
-        count=struct.unpack_from('<b',bytestream,sptr)[0]
-        sptr+=1
-        if(count<0):
-          color=palette[bytestream[sptr]]
-          sptr+=1
-          while(count<=0):
-            count=count+1
-            struct.pack_into('<H',bitmap,dptr,color)
-            dptr+=2
-        else:
-          while(count>=0):
-            count=count-1
-            struct.pack_into('<H',bitmap,dptr,palette[bytestream[sptr]])
-            dptr+=2
-            sptr+=1
-      row+=1
-    if(bytestream[-len(waitfor):]!=waitfor):
-      raise Exception('Communications timeout.')
-    bytestream=bitmap
+    try:
+      bytestream=decoderle8(bytestream,width,height,hdrpsize)
+    except:
+      raise Exception('RLE decoding failed, appears corrupt structure.')
   elif (options.format=='rgb565'):
     nano_tiny.timeout=stimeout
     starttime=time.time()
