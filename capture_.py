@@ -28,7 +28,7 @@ VID = 0x0483 #1155
 PID = 0x5740 #22336
 
 app=Path(__file__).stem
-print(f'{app}_v1.02')
+print(f'{app}_v1.03')
 
 # Get nanovna device automatically
 def getdevice() -> str:
@@ -121,10 +121,11 @@ prompt = b'ch> '
 #start talking
 with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_tiny: # open serial connection
   nano_tiny.write( b'pause\r' )  # stop screen update
-  echo = nano_tiny.read_until( b'pause' + crlf + prompt ) # wait for completion
-  if(len(echo)==0):
-    raise Exception('Timed out, zero bytes received waiting for "pause" command response, check communications settings (incl on NanoVNA).')
-  #print( echo )
+  waitfor=b'pause' + crlf + prompt
+  echo = nano_tiny.read_until( waitfor ) # wait for completion
+  if(echo!=waitfor):
+    raise Exception('Timed out waiting for "pause" command response, check communications settings (incl on NanoVNA).')
+  print( echo )
 
   if(options.format=='rgb565'):
     nano_tiny.write( b'capture\rresume\r' )  # request screen capture, type ahead resume
@@ -136,6 +137,8 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
 
   bytestream = nano_tiny.read(0x0a) # is this a RLE header?
   hdrmagic,hdrwidth, hdrheight,hdrbpp,hdrcompression,hdrpsize=struct.unpack_from('<HHHBBH',bytestream,0)
+  if(len(bytestream)<0x0a):
+      raise Exception('Communications timeout (1).')
   if(hdrmagic == 0x4d42):
     if(hdrbpp!=8):
       raise Exception('Unsupported compression bpp.')
@@ -158,7 +161,7 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
     endtime=time.time()
     print('RLE: time: {:0.3f}s, transferred: {:,d}B, throughput: {:,d}bps'.format(endtime-starttime,len(bytestream),int(len(bytestream)*8/(endtime-starttime))))
     if(bytestream[-len(waitfor):]!=waitfor):
-      raise Exception('Communications timeout.')
+      raise Exception('Communications timeout (2).')
 #CRC feature requested, not yet implemented... OD 20240727
 #    calculator = Calculator(Crc16.KERMIT)
 #    assert expected == calculator.checksum(bytestream)
@@ -174,7 +177,7 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
     print('read now...')
     bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
     if(bytestream[-len(waitfor):]!=waitfor):
-      raise Exception('Communications timeout.')
+      raise Exception('Communications timeout (3).')
     bytestream=bytestream[0:-len(waitfor)]
     endtime=time.time()
     print('RGB: time: {:0.3f}s, transferred: {:d}B, throughput: {:d}bps'.format(endtime-starttime,len(bytestream),int(2*size*8/(endtime-starttime))))
