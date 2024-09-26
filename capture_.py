@@ -28,7 +28,7 @@ VID = 0x0483 #1155
 PID = 0x5740 #22336
 
 app=Path(__file__).stem
-print(f'{app}_v1.03')
+print(f'{app}_v1.04')
 
 # Get nanovna device automatically
 def getdevice() -> str:
@@ -87,6 +87,8 @@ ap.add_argument( "-s", "--scale",
     help="scale image s*",default=2 )
 ap.add_argument( "-f", "--format",
     help="image format [rle | rgb565]" )
+ap.add_argument( "-p", "--pause",action="store_true",
+    help="keep paused" )
 
 options = ap.parse_args()
 nanodevice = options.comport or getdevice()
@@ -128,10 +130,20 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
   print( echo )
 
   if(options.format=='rgb565'):
-    nano_tiny.write( b'capture\rresume\r' )  # request screen capture, type ahead resume
+    if(not options.pause):
+      nano_tiny.write( b'capture\rresume\r')  # request screen capture, type ahead resume
+      waitfor=prompt + b'resume' + crlf + prompt
+    else:
+      nano_tiny.write( b'capture\r\r')  # request screen capture, type ahead
+      waitfor=prompt + crlf + prompt
     echo = nano_tiny.read_until( b'capture' + crlf ) # wait for start of transfer
   else:
-    nano_tiny.write( b'capture rle\rresume\r' )  # request screen capture, type ahead resume
+    if(not options.pause):
+      nano_tiny.write( b'capture rle\rresume\r')  # request screen capture, type ahead resume
+      waitfor=prompt + b'resume' + crlf + prompt
+    else:
+      nano_tiny.write( b'capture rle\r\r')  # request screen capture, type ahead
+      waitfor=prompt + crlf + prompt
     echo = nano_tiny.read_until( b'capture rle' + crlf ) # wait for start of transfer
 #  print( echo )
 
@@ -156,7 +168,6 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
 
   if(options.format=='rle'):
     starttime=time.time()
-    waitfor=prompt + b'resume' + crlf + prompt
     bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
     endtime=time.time()
     print('RLE: time: {:0.3f}s, transferred: {:,d}B, throughput: {:,d}bps'.format(endtime-starttime,len(bytestream),int(len(bytestream)*8/(endtime-starttime))))
@@ -173,7 +184,6 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
   elif (options.format=='rgb565'):
     nano_tiny.timeout=stimeout
     starttime=time.time()
-    waitfor=prompt + b'resume' + crlf + prompt
     print('read now...')
     bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
     if(bytestream[-len(waitfor):]!=waitfor):
