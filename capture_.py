@@ -211,7 +211,7 @@ for x in range (0,height):
     a[x,y,0]=(pixel&0xf800)>>8
     a[x,y,1]=(pixel&0x07e0)>>3
     a[x,y,2]=(pixel&0x001f)<<3
-image=Image.fromarray(a,"RGB")
+image=Image.fromarray(a)
 #some transforms
 image=image.resize((int(sf*width),int(sf*height)))
 inverted_image=PIL.ImageOps.invert(image)
