@@ -86,9 +86,11 @@ ap.add_argument( "-o", "--out",
 ap.add_argument( "-s", "--scale",
     help="scale image s*",default=2 )
 ap.add_argument( "-f", "--format",
-    help="image format [rle | rgb565]" )
+    help="image format [rle | rgb565]",default='rgb565')
 ap.add_argument( "-p", "--pause",action="store_true",
     help="keep paused" )
+ap.add_argument( '-v', '--verbose', action = 'store_true',
+    help='verbose the communication progress' )
 
 options = ap.parse_args()
 nanodevice = options.comport or getdevice()
@@ -97,7 +99,7 @@ if options.device!=None:
 outfile = options.out
 sf=float(options.scale)
 
-print(devicename)
+print('Device: ',devicename)
 
 if devicename == 'tinysa':
     width = 320
@@ -127,7 +129,6 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
   echo = nano_tiny.read_until( waitfor ) # wait for completion
   if(echo!=waitfor):
     raise Exception('Timed out waiting for "pause" command response, check communications settings (incl on NanoVNA).')
-  print( echo )
 
   if(options.format=='rgb565'):
     if(not options.pause):
@@ -137,6 +138,7 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
       nano_tiny.write( b'capture\r\r')  # request screen capture, type ahead
       waitfor=prompt + crlf + prompt
     echo = nano_tiny.read_until( b'capture' + crlf ) # wait for start of transfer
+    print('got capture echo')
   else:
     if(not options.pause):
       nano_tiny.write( b'capture rle\rresume\r')  # request screen capture, type ahead resume
@@ -145,7 +147,6 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
       nano_tiny.write( b'capture rle\r\r')  # request screen capture, type ahead
       waitfor=prompt + crlf + prompt
     echo = nano_tiny.read_until( b'capture rle' + crlf ) # wait for start of transfer
-#  print( echo )
 
   bytestream = nano_tiny.read(0x0a) # is this a RLE header?
   hdrmagic,hdrwidth, hdrheight,hdrbpp,hdrcompression,hdrpsize=struct.unpack_from('<HHHBBH',bytestream,0)
@@ -185,10 +186,21 @@ with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_t
     nano_tiny.timeout=stimeout
     starttime=time.time()
     print('read now...')
-    bytestream = bytestream + nano_tiny.read_until(waitfor) # wait for completion
-    if(bytestream[-len(waitfor):]!=waitfor):
-      raise Exception('Communications timeout (3).')
-    bytestream=bytestream[0:-len(waitfor)]
+    if options.verbose:
+      print('download timeout {0:0.1f} s'.format(stimeout))
+    bytestream+=nano_tiny.read(2*size-10)
+    if options.verbose:
+      print( f'received {len(bytestream)} image bytes:' )
+      print( f'  {bytestream[:10]} ... {bytestream[-10:]}' )
+    if len(bytestream)!=2*size:
+       if options.verbose:
+          print(len(bytestream),2*size)
+       print( f'capture error - wrong requested screen size {width} * {height}?' )
+       sys.exit()
+    echo=nano_tiny.read_until(crlf+prompt) # wait for completion
+    if options.verbose:
+      print('resume screen update')
+      print(f'ready: {echo}')
     endtime=time.time()
     print('RGB: time: {:0.3f}s, transferred: {:d}B, throughput: {:d}bps'.format(endtime-starttime,len(bytestream),int(2*size*8/(endtime-starttime))))
  #   nano_tiny.timeout=1
