@@ -25,16 +25,17 @@ import struct
 
 # ChibiOS/RT Virtual COM Port
 VID = 0x0483 #1155
-PID = 0x5740 #22336
+PID0 = 0x5740 #22336
+PID1 = 0x5741 #22337 tinyGTC
 
 app=Path(__file__).stem
-print(f'{app}_v1.04')
+print(f'{app}_v1.05')
 
 # Get nanovna device automatically
 def getdevice() -> str:
     device_list = list_ports.comports()
     for device in device_list:
-        if device.vid == VID and device.pid == PID:
+        if device.vid == VID and (device.pid == PID0 or device.pid == PID1):
             return device.device
     raise OSError("device not found")
 
@@ -116,6 +117,9 @@ elif devicename == 'nanovnah4': # 4" device
 elif devicename == 'tinypfa': # 4" device
     width = 480
     height = 320
+elif devicename == 'tinygtc': # 4" device
+    width = 480
+    height = 320
 else:
     sys.exit('Unknown device name.');
 
@@ -124,8 +128,13 @@ prompt = b'ch> '
 
 #start talking
 with serial.Serial( nanodevice, baudrate=options.baudrate, timeout=5 ) as nano_tiny: # open serial connection
-  nano_tiny.write( b'pause\r' )  # stop screen update
-  waitfor=b'pause' + crlf + prompt
+  if(devicename=='tinygtc'):
+    prompt = b'> '
+    nano_tiny.write( b'\r' )  # stop screen update
+    waitfor=crlf + prompt
+  else:
+    nano_tiny.write( b'pause\r' )  # stop screen update
+    waitfor=b'pause' + crlf + prompt
   echo = nano_tiny.read_until( waitfor ) # wait for completion
   if(echo!=waitfor):
     raise Exception('Timed out waiting for "pause" command response, check communications settings (incl on NanoVNA).')
