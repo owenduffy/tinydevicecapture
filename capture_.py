@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 '''
 Command line tool to capture a screen shot from NanoVNA or tinySA
@@ -29,7 +29,7 @@ PID0 = 0x5740 #22336
 PID1 = 0x5741 #22337 tinyGTC
 
 app=Path(__file__).stem
-print(f'{app}_v1.05')
+print(f'{app}_v1.06')
 
 # Get nanovna device automatically
 def getdevice() -> str:
