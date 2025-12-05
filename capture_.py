@@ -35,7 +35,9 @@ print(f'{app}_v1.05')
 def getdevice() -> str:
     device_list = list_ports.comports()
     for device in device_list:
-        if device.vid == VID and (device.pid == PID0 or device.pid == PID1):
+        if device.vid == VID and device.pid == PID0:
+            return device.device
+        if device.vid == VID and device.pid == PID1 and device.hwid.endswith(".0"): #tinyGTC
             return device.device
     raise OSError("device not found")
 
@@ -112,6 +114,9 @@ elif devicename == 'tinysaultra': # 4" device
     width = 480
     height = 320
 elif devicename == 'nanovnah4': # 4" device
+    width = 480
+    height = 320
+elif devicename == 'NanoVNA-H4': # 4" device
     width = 480
     height = 320
 elif devicename == 'tinypfa': # 4" device
